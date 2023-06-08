@@ -1,92 +1,90 @@
-# APISIX
+# 1 Introduction
+
+APISIX is an API management tool and in ODALA it's been designed and configured to work together with Keycloak. This access control layer can replace the Umbrella/Keyrock combination.
+
+# 2 Configurations
+
+Deployment is via GitLab CI/CD pipeline. 
+
+Deployment follows similar pattern like other components, Operator with Helm charts and substituting values to template files.
+
+APISIX has an admin API. Using that API we setup predefined routes and auth plugin (scorpio-client).
 
 
+# 2.1 Intergration with Keycloak
 
-## Getting started
+APISIX is configured to use [authz-keycloak](https://apisix.apache.org/docs/apisix/2.15/plugins/authz-keycloak/) plugin. This allows us to user Keycloak as and IDM with APISIX. 
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+# 2.2 Fetching a token to access data
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+In order to get an access token, Keycloak provides a token endpoint:
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.publiccode.solutions/odala-public/apisix.git
-git branch -M main
-git push -uf origin main
+curl --location --request POST 'https://keycloak.staging.odala.kiel.de/realms/apisix-realm/protocol/openid-connect/token' \
+--header 'Content-Type: application/x-www-form-urlencoded' \
+--data-urlencode 'client_id=scorpio-client' \
+--data-urlencode 'username=scorpiowriter' \
+--data-urlencode 'password=xxx' \
+--data-urlencode 'grant_type=password' \
+--data-urlencode 'client_secret=xxx'
 ```
+After that you can make a request towards Scorpio context broker:
 
-## Integrate with your tools
+```
+curl --location --request GET 'https://scorpio-apisix.staging.odala.kiel.de/ngsi-ld/v1/entities/?type=TrafficFlowObserved' \
+--header 'Authorization: Bearer eyJ...3A' \
+--header 'Link: https://schema.lab.fiware.org/ld/context; rel=http://www.w3.org/ns/json-ld#context; type=application/ld+json'
+```
+and receive a response like:
 
-- [ ] [Set up project integrations](https://gitlab.publiccode.solutions/odala-public/apisix/-/settings/integrations)
+```
+[
+    {
+        "id": "urn:ngsi-ld:TrafficFlowObserved:61bb15be345c06d77f32e528",
+        "type": "TrafficFlowObserved",
+        "description": {
+            "type": "Property",
+            "value": "MQ13"
+        },
+        "address": {
+            "type": "Property",
+            "value": {
+                "type": "PostalAddress",
+                "streetAddress": "Alte Lu
+                .
+                .
+                .
+```
+As an admin, you have access to the client application which holds the secrets needed for the requests. They also need to be in the CI/CD pipeline inorder the deployment to work.
 
-## Collaborate with your team
+# 3 Preconfigured APIs
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+There are few APIs created in the CI/CD pipeline. There are two type; one for the protected access and handful of others to provide open access to selected data.
 
-## Test and Deploy
+# 4 Configuration model
 
-Use the built-in continuous integration in GitLab.
+Crash course to APISIX concepts:
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+Route: A route is a routing path to upstream targets. In Apache APISIX, routes are responsible for matching client's requests based on defined rules, loading and executing the corresponding plugins, as well as forwarding requests to the specified upstream services. In APISIX, a simple route can be set up with a path-matching URI and a corresponding upstream address.
 
-***
+Upstream: An upstream is a set of target nodes with the same work. It defines a virtual host abstraction that performs load balancing on a given set of service nodes according to the configured rules.
 
-# Editing this README
+If any changes need to be done to APISIX configuration, we recommend doing it via CI/CD pipe. This way the changes are under version control and can be rolled back as needed. 
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
+The model we found useful was to develop by hand in the API and once configuration was complete, copy that to the CI/CD pipeline and run it from there to the deployment.
 
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+# 5 Known issues / to be developed
 
-## Name
-Choose a self-explaining name for your project.
+There is a never [version](https://apisix.apache.org/docs/apisix/getting-started/README/) 3.3 at the time of writing. It is recommended to update to that version. Please note that there are [breaking changes](https://apisix.apache.org/docs/apisix/next/upgrade-guide-from-2.15.x-to-3.0.0/).
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+Grafana analytics have not been enabled.
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+Components- APISIX
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+for the ODALA project.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+© 2022 Contrasec Oy
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+License EUPL 1.2
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+![](https://ec.europa.eu/inea/sites/default/files/ceflogos/en_horizontal_cef_logo_2.png)

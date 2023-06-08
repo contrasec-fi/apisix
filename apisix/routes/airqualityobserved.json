@@ -1,0 +1,49 @@
+{
+  "uri": "/airqualityobserved",
+  "name": "Open API - airqualityobserved",
+  "desc": "Open API for Observed Airquality",
+  "methods": [
+    "GET",
+    "HEAD",
+    "OPTIONS",
+    "CONNECT",
+    "TRACE"
+  ],
+  "host": "scorpio-apisix.DOMAIN",
+  "plugins": {
+    "proxy-rewrite": {
+      "headers": {
+        "Link": "https://schema.lab.fiware.org/ld/context; rel=http://www.w3.org/ns/json-ld#context; type=application/ld+json"
+      },
+      "uri": "/ngsi-ld/v1/entities?type=AirQualityObserved&q=name~=WSAQN[1-2]",
+      "use_real_request_uri_unsafe": false
+    }
+  },
+  "upstream": {
+    "nodes": [
+      {
+        "host": "scorpioservice.NAMESPACE.svc.cluster.local",
+        "port": 9090,
+        "weight": 1
+      }
+    ],
+    "timeout": {
+      "connect": 6,
+      "send": 6,
+      "read": 6
+    },
+    "type": "roundrobin",
+    "hash_on": "vars",
+    "scheme": "http",
+    "pass_host": "pass",
+    "keepalive_pool": {
+      "idle_timeout": 60,
+      "requests": 1000,
+      "size": 320
+    }
+  },
+  "labels": {
+    "API_VERSION": "0.1"
+  },
+  "status": 1
+}

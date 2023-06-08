@@ -1,0 +1,35 @@
+#!/bin/bash
+
+echo ""
+
+access_token=$(kubectl -n odala-staging exec -it keycloak-0 -- \
+    curl -X POST \
+    -d "client_id=scorpio-client" \
+    -d "client_secret=******8IWAgmBpPuA8lTPdy1IBH7****" \
+    -d "username=scorpioreader" \
+    -d "password=******MJbcIfWpkhjuuy" \
+    -d "grant_type=password" \
+    "http://keycloak/realms/apisix-realm/protocol/openid-connect/token" | jq -r '.access_token')
+
+echo "Token: $access_token"
+
+echo ""
+scorpio_endpoint="https://scorpio-apisix.DOMAIN/ngsi-ld/v1/entities/?type=TrafficFlowObserved"
+echo "Scorpio endpoint: $scorpio_endpoint"
+
+echo ""
+echo "Valid query with access_token"
+# Scorpio curl with access token
+curl $scorpio_endpoint -H "Authorization:Bearer $access_token"
+
+echo ""
+echo ""
+echo "Invalid query with invalied access_token"
+curl $scorpio_endpoint -H "Authorization:Bearer aaa"
+
+echo ""
+echo ""
+echo "Invalid query without access_token"
+curl $scorpio_endpoint
+
+echo ""

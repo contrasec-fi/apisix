@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    kubernetes.io/ingress.class: nginx
+    large-client-header-buffers: "8 32k"
+    http2-max-field-size: "32k"
+    http2-max-header-size: "32k"
+  name: apisix-dashboard
+  namespace: NAMESPACE
+spec:
+  rules:
+  - host: apisix-dashboard.DOMAIN
+    http:
+      paths:
+      - backend:
+          service:
+            name: apisix-dashboard
+            port:
+              number: 80
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - apisix-dashboard.DOMAIN
+    secretName: apisix-dashboard-cert

@@ -1,0 +1,45 @@
+{
+  "uri": "/*",
+  "name": "scorpio-route",
+  "methods": [
+    "GET"
+  ],
+  "host": "scorpio-apisix.DOMAIN",
+  "plugins": {
+    "authz-keycloak": {
+      "access_token_expires_in": 300,
+      "access_token_expires_leeway": 0,
+      "cache_ttl_seconds": 86400,
+      "client_id": "scorpio-client",
+      "discovery": "https://keycloak.DOMAIN/realms/apisix-realm/.well-known/openid-configuration",
+      "grant_type": "urn:ietf:params:oauth:grant-type:uma-ticket",
+      "http_method_as_scope": false,
+      "keepalive": true,
+      "keepalive_pool": 5,
+      "keepalive_timeout": 60000,
+      "lazy_load_paths": false,
+      "permissions": [
+        "res:scorpio#scopes:read-data"
+      ],
+      "policy_enforcement_mode": "PERMISSIVE",
+      "refresh_token_expires_in": 3600,
+      "refresh_token_expires_leeway": 0,
+      "ssl_verify": false,
+      "timeout": 3000
+    }
+  },
+  "upstream": {
+    "nodes": [
+      {
+        "host": "scorpioservice.NAMESPACE.svc.cluster.local",
+        "port": 9090,
+        "weight": 1
+      }
+    ],
+    "type": "roundrobin",
+    "hash_on": "vars",
+    "scheme": "http",
+    "pass_host": "pass"
+  },
+  "status": 1
+}

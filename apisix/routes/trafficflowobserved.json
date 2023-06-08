@@ -1,0 +1,54 @@
+{
+  "uri": "/trafficflowobserved",
+  "name": "Open API - trafficflowobserved",
+  "desc": "Open API for Traffic Flow Observed",
+  "methods": [
+    "GET",
+    "HEAD",
+    "OPTIONS",
+    "CONNECT",
+    "TRACE"
+  ],
+  "host": "scorpio-apisix.DOMAIN",
+  "vars": [
+    [
+      "arg_type",
+      "~=",
+      "AirQualityObserved"
+    ]
+  ],
+  "plugins": {
+    "proxy-rewrite": {
+      "headers": {
+        "Link": "https://schema.lab.fiware.org/ld/context; rel=http://www.w3.org/ns/json-ld#context; type=application/ld+json"
+      },
+      "uri": "/ngsi-ld/v1/entities?type=TrafficFlowObserved"
+    }
+  },
+  "upstream": {
+    "nodes": [
+      {
+        "host": "scorpioservice.NAMESPACE.svc.cluster.local",
+        "port": 9090,
+        "weight": 1
+      }
+    ],
+    "timeout": {
+      "connect": 6,
+      "send": 6,
+      "read": 6
+    },
+    "type": "roundrobin",
+    "scheme": "http",
+    "pass_host": "pass",
+    "keepalive_pool": {
+      "idle_timeout": 60,
+      "requests": 1000,
+      "size": 320
+    }
+  },
+  "labels": {
+    "API_VERSION": "0.1"
+  },
+  "status": 1
+}

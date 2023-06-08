@@ -1,0 +1,120 @@
+.deploy_template: &deploy_template
+  image: dtzar/helm-kubectl
+  stage: setup
+  when: manual
+  before_script:
+    # Write kubeconfig to file and remove world-read permission
+    - mkdir ~/.kube
+    - echo "$KUBECONFIGFILE" > ~/.kube/config
+    - chmod go-r ~/.kube/config
+  script:
+    - echo "Installing helm charts"
+    # Install apisix helm charts
+    - helm repo add apisix https://charts.apiseven.com
+    - helm repo update
+
+    # Substitute ENV placeholders in values and resources
+    - sed -i "s/SCORPIO_DOMAIN/${SCORPIO_DOMAIN}/g" ./apisix/values.yaml
+    - sed -i "s/APISIX_DASHBOARD_PASSWORD/${APISIX_DASHBOARD_PASSWORD}/g" ./apisix/dashboard-values.yaml
+    #- sed -i "s/SCORPIO_DOMAIN/${SCORPIO_DOMAIN}/g" ./apisix/routes/scorpio.json
+    #- sed -i "s/SCORPIO_INTERNAL/${SCORPIO_INTERNAL}/g" ./apisix/routes/scorpio.json
+    - sed -i "s/APISIX_API_KEY/${APISIX_API_KEY}/g" ./apisix/values.yaml
+    - sed -i "s/TIMEZONE/${TIMEZONE}/g" ./apisix/values.yaml
+    - sed -i "s/DOMAIN/${DOMAIN}/g" ./apisix/ingress.yaml
+    - sed -i "s/NAMESPACE/${NAMESPACE}/g" ./apisix/ingress.yaml
+
+    - echo "Applying ingress"
+    - kubectl -n $CI_COMMIT_REF_NAME apply -f ./apisix/ingress.yaml --kubeconfig ~/.kube/config
+
+    - echo "Deplyoing Apisix"
+    # Install Apisix using values.yaml
+    - helm upgrade --install apisix apisix/apisix -f ./apisix/values.yaml --version "0.11.1" --create-namespace --namespace $CI_COMMIT_REF_NAME --history-max 3 --kubeconfig ~/.kube/config
+    
+    # Install Apisix dashboard using dashboard-values.yaml
+    - helm upgrade --install apisix-dashboard apisix/apisix-dashboard -f ./apisix/dashboard-values.yaml --version "0.6.0" --create-namespace --namespace $CI_COMMIT_REF_NAME --history-max 3 --kubeconfig ~/.kube/config
+
+.configuration_template: &configuration_template
+  image: ubuntu:trusty
+  # Only run deploy stage from staging branch
+  stage: config
+  when: manual
+  allow_failure: true
+  before_script:
+    # Install useful tools
+    - apt update && apt install curl jq -y
+
+    # Announce namespace
+    - echo Configuring $CI_COMMIT_REF_NAME namespace
+  script:
+    - APISIX_HOST=apisix-admin.$CI_COMMIT_REF_NAME.svc.cluster.local
+    - APISIX_PORT=9180
+
+    # SED
+    - sed -i "s/SCORPIO_DOMAIN/${SCORPIO_DOMAIN}/g" ./apisix/routes/scorpio.json
+    - sed -i "s/SCORPIO_INTERNAL/${SCORPIO_INTERNAL}/g" ./apisix/routes/scorpio.json
+    - sed -i "s/DOMAIN/${DOMAIN}/g" ./apisix/routes/scorpio.json
+    - sed -i "s/NAMESPACE/${NAMESPACE}/g" ./apisix/routes/scorpio.json
+    - sed -i "s/DOMAIN/${DOMAIN}/g" ./apisix/routes/airqualityobserved.json
+    - sed -i "s/NAMESPACE/${NAMESPACE}/g" ./apisix/routes/airqualityobserved.json
+    - sed -i "s/DOMAIN/${DOMAIN}/g" ./apisix/routes/crowdflowobserved.json
+    - sed -i "s/NAMESPACE/${NAMESPACE}/g" ./apisix/routes/crowdflowobserved.json
+    - sed -i "s/DOMAIN/${DOMAIN}/g" ./apisix/routes/noiselevelobserved.json
+    - sed -i "s/NAMESPACE/${NAMESPACE}/g" ./apisix/routes/noiselevelobserved.json
+    - sed -i "s/DOMAIN/${DOMAIN}/g" ./apisix/routes/trafficflowobserved.json
+    - sed -i "s/NAMESPACE/${NAMESPACE}/g" ./apisix/routes/trafficflowobserved.json
+    - sed -i "s/DOMAIN/${DOMAIN}/g" ./apisix/routes/weatherobserved.json
+    - sed -i "s/NAMESPACE/${NAMESPACE}/g" ./apisix/routes/weatherobserved.json
+
+    # APISIX
+    ## Wait for apisix
+    - until nc -z $APISIX_HOST $APISIX_PORT 2>&1; do sleep 10; done
+    ## Configure Apisix with Scorpio route
+    - curl $APISIX_HOST:$APISIX_PORT/apisix/admin/routes/1 -H "X-API-KEY:$APISIX_API_KEY" -X PUT -T ./apisix/routes/scorpio.json --retry 5 --retry-delay 30 || echo command failed $?
+    ## Configure Apisix with crowdflowobserved route
+    - curl $APISIX_HOST:$APISIX_PORT/apisix/admin/routes/1001 -H "X-API-KEY:$APISIX_API_KEY" -X PUT -T ./apisix/routes/crowdflowobserved.json --retry 5 --retry-delay 30 || echo command failed $?
+    ## Configure Apisix with noiselevelobserved route
+    - curl $APISIX_HOST:$APISIX_PORT/apisix/admin/routes/1002 -H "X-API-KEY:$APISIX_API_KEY" -X PUT -T ./apisix/routes/noiselevelobserved.json --retry 5 --retry-delay 30 || echo command failed $?
+    ## Configure Apisix with trafficflowobserved route
+    - curl $APISIX_HOST:$APISIX_PORT/apisix/admin/routes/1003 -H "X-API-KEY:$APISIX_API_KEY" -X PUT -T ./apisix/routes/trafficflowobserved.json --retry 5 --retry-delay 30 || echo command failed $?
+    ## Configure Apisix with weatherobserved route
+    - curl $APISIX_HOST:$APISIX_PORT/apisix/admin/routes/1004 -H "X-API-KEY:$APISIX_API_KEY" -X PUT -T ./apisix/routes/weatherobserved.json --retry 5 --retry-delay 30 || echo command failed $?
+    ## Configure Apisix with airqualityobserved route
+    - curl $APISIX_HOST:$APISIX_PORT/apisix/admin/routes/1005 -H "X-API-KEY:$APISIX_API_KEY" -X PUT -T ./apisix/routes/airqualityobserved.json --retry 5 --retry-delay 30 || echo command failed $?
+    
+    - echo variables $APISIX_HOST $SCORPIO_INTERNAL 
+
+stages:
+  - setup
+  - config
+
+# Deployment setup
+do setup staging:
+  tags:
+  - profirator
+  <<: *deploy_template
+  variables:
+    KUBECONFIGFILE: $KUBECONFIG
+    APISIX_API_KEY: $STAGING_APISIX_API_KEY
+    APISIX_DASHBOARD_PASSWORD: $STAGING_APISIX_DASHBOARD_PASSWORD
+    SCORPIO_DOMAIN: $STAGING_SCORPIO_DOMAIN
+    SCORPIO_INTERNAL: $STAGING_SCORPIO_INTERNAL
+    DOMAIN: $DOMAIN_STAGING
+    NAMESPACE: "odala-staging"
+    TIMEZONE: "Europe/Helsinki"
+  only:
+    - odala-staging
+
+do config staging:
+  tags:
+  - profirator
+  <<: *configuration_template
+  variables:
+    KUBECONFIGFILE: $KUBECONFIG
+    APISIX_API_KEY: $STAGING_APISIX_API_KEY
+    APISIX_DASHBOARD_PASSWORD: $STAGING_APISIX_DASHBOARD_PASSWORD
+    SCORPIO_DOMAIN: $STAGING_SCORPIO_DOMAIN
+    SCORPIO_INTERNAL: $STAGING_SCORPIO_INTERNAL
+    DOMAIN: $DOMAIN_STAGING
+    NAMESPACE: $CI_COMMIT_REF_NAME
+  only:
+    - odala-staging
