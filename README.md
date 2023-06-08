@@ -6,7 +6,7 @@ APISIX is an API management tool and in ODALA it's been designed and configured 
 
 Deployment is via GitLab CI/CD pipeline. 
 
-Deployment follows similar pattern like other components, Operator with Helm charts and substituting values to template files.
+Deployment follows similar pattern like other components, Helm charts and substituting values to template files.
 
 APISIX has an admin API. Using that API we setup predefined routes and auth plugin (scorpio-client).
 
